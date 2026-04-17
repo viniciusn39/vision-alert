@@ -1,0 +1,72 @@
+# VisionAlert Edge — docker-compose for client site deployment
+# Hardware: Mini PC with NVIDIA GPU (RTX 3060/4060)
+#
+# Setup:
+#   1. Install Docker + NVIDIA Container Toolkit
+#   2. Run: python3 agent/register.py --central https://app.visionalert.com.br --tenant-id X --name "Nome"
+#   3. Run: docker compose up -d
+#   4. Done — the agent syncs cameras/rules from central automatically
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Main agent — syncs config, sends heartbeat, reports alerts
+  agent:
+    build: .
+    restart: always
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - config_data:/app/config
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  # YOLO worker — processes camera frames with GPU
+  worker:
+    build: .
+    command: celery -A edge_worker worker -l info -Q cameras -c 2
+    restart: always
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - config_data:/app/config
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      redis:
+        condition: service_healthy
+      agent:
+        condition: service_started
+
+  # Watchtower — auto-updates containers when new images are pushed
+  watchtower:
+    image: containrrr/watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+    command: --interval 300
+
+volumes:
+  redis_data:
+  config_data:

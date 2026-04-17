@@ -1,0 +1,114 @@
+
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: visionalert
+      POSTGRES_USER: visionuser
+      POSTGRES_PASSWORD: visionpass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U visionuser -d visionalert"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: sh entrypoint.sh
+    volumes:
+      - ./backend:/app
+      - static_files:/app/staticfiles
+      - media_files:/app/media
+      - camera_uploads:/tmp/camera_uploads
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config worker -l info -Q default,cameras -c 4
+    volumes:
+      - ./backend:/app
+      - camera_uploads:/tmp/camera_uploads
+      - media_files:/app/media
+    environment:
+      - OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    restart: on-failure
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  flower:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: celery -A config flower --port=5555
+    ports:
+      - "5555:5555"
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - backend
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "4200:80"
+    depends_on:
+      - backend
+
+volumes:
+  pg_data:
+  redis_data:
+  static_files:
+  media_files:
+  camera_uploads:

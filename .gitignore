@@ -1,0 +1,12 @@
+.env
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.DS_Store
+*.sqlite3
+media/
+staticfiles/
+.venv/
+*.onnx
+*.pt
