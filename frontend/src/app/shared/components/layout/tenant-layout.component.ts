@@ -15,10 +15,7 @@ import { ApiService } from '../../../core/services/api.service';
       <aside class="sidebar">
         <div class="sidebar-brand">
           <div class="brand-logo">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2">
-              <path d="M15 10l4.553-2.277A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14v-4z"/>
-              <rect x="2" y="7" width="13" height="10" rx="2"/>
-            </svg>
+            <img src="assets/icons/icon.svg" width="20" height="20" style="filter: brightness(0) invert(1);">
           </div>
           <div>
             <div class="brand-name">VisionAlert</div>
