@@ -20,11 +20,24 @@ for i in range(30):
 echo "📦 Executando migrations..."
 python manage.py migrate --noinput
 
-echo "🌱 Seed inicial..."
-python manage.py seed
-
 echo "📁 Static files..."
 python manage.py collectstatic --noinput
+
+# Roda seed apenas se não houver nenhum plano cadastrado (primeira vez)
+PLAN_COUNT=$(python -c "
+import os, django
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+django.setup()
+from apps.tenants.models import Plan
+print(Plan.objects.count())
+")
+
+if [ "$PLAN_COUNT" = "0" ]; then
+  echo "🌱 Primeira execução — rodando seed inicial..."
+  python manage.py seed
+else
+  echo "✅ Dados já existem (${PLAN_COUNT} planos) — seed ignorado"
+fi
 
 echo "🚀 Iniciando servidor..."
 exec daphne -b 0.0.0.0 -p 8000 config.asgi:application
