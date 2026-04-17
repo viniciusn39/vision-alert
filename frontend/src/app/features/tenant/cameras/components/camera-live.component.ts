@@ -39,7 +39,7 @@ import { Camera } from '../../../../core/models/models';
       @if (error()) {
         <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:#fff;padding:40px">
           <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,.5)" stroke-width="1.5"><path d="M15 10l4.553-2.277A1 1 0 0121 8.723v6.554a1 1 0 01-1.447.894L15 14v-4z"/><rect x="2" y="7" width="13" height="10" rx="2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
-          <span style="font-size:13px;opacity:.6">Câmera offline ou sem sinal</span>
+          <span style="font-size:13px;opacity:.6">{{ errorMsg() || 'Câmera offline ou sem sinal' }}</span>
         </div>
       }
     </div>
@@ -64,12 +64,27 @@ export class CameraLiveComponent implements OnInit {
   loading = signal(true);
   streamUrl = signal<string | null>(null);
   error = signal(false);
+  errorMsg = signal<string | null>(null);
 
   ngOnInit() {
-    const token = localStorage.getItem('access_token') || '';
-    setTimeout(() => {
-      this.streamUrl.set(this.api.getCameraStreamUrl(this.camera.id, token));
-    }, 200);
+    // Pede um stream-token curto (60s) — evita trafegar o JWT de sessão
+    // em query string do <img>.
+    this.api.requestStreamToken(this.camera.id).subscribe({
+      next: (res) => {
+        this.streamUrl.set(this.api.getCameraStreamUrl(this.camera.id, res.token));
+      },
+      error: (err) => {
+        this.loading.set(false);
+        this.error.set(true);
+        if (err?.status === 429) {
+          this.errorMsg.set('Muitos streams simultâneos. Feche algum e tente novamente.');
+        } else if (err?.status === 403 || err?.status === 401) {
+          this.errorMsg.set('Sem permissão para esta câmera.');
+        } else {
+          this.errorMsg.set('Não foi possível iniciar o stream.');
+        }
+      }
+    });
   }
 
   onError() {

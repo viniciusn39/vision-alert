@@ -14,5 +14,6 @@ urlpatterns = [
     # Admin endpoints (called by Angular frontend, requires superadmin JWT)
     path("admin/devices/", views.AdminDeviceListView.as_view()),
     path("admin/devices/<uuid:pk>/logs/", views.AdminDeviceLogsView.as_view()),
+    path("admin/devices/<uuid:pk>/rotate-key/", views.AdminRotateKeyView.as_view()),
     path("admin/provision/", views.AdminProvisionView.as_view()),
 ]

@@ -54,13 +54,16 @@ class Camera(models.Model):
         return f"{self.tenant} — {self.name}"
 
     def save(self, *args, **kwargs):
-        # Encrypt password before saving if it's not already encrypted
-        if self.password and not self.password.startswith("gAAAAA"):
-            from .crypto import encrypt_value
-            self.password = encrypt_value(self.password)
+        # Cifra senha antes de salvar, se ainda não estiver cifrada.
+        # Usa prefixo explícito "enc:v1:" (ver crypto.py).
+        if self.password:
+            from .crypto import encrypt_value, is_encrypted
+            if not is_encrypted(self.password):
+                self.password = encrypt_value(self.password)
         super().save(*args, **kwargs)
 
     def get_decrypted_password(self):
+        """Retorna senha em plaintext. Levanta CameraCryptoError em falha."""
         if not self.password:
             return ""
         from .crypto import decrypt_value
@@ -73,8 +76,19 @@ class Camera(models.Model):
             return self.url
         if self.username and self.password:
             from urllib.parse import urlparse, urlunparse
+            from .crypto import CameraCryptoError
+            try:
+                decrypted_pwd = self.get_decrypted_password()
+            except CameraCryptoError:
+                # Não montar URL com senha inválida — melhor abrir sem auth
+                # e deixar o VideoCapture falhar explicitamente.
+                import logging
+                logging.getLogger(__name__).error(
+                    "Camera %s: senha corrompida, tentando conexão sem credenciais",
+                    self.pk
+                )
+                return self.url
             parsed = urlparse(self.url)
-            decrypted_pwd = self.get_decrypted_password()
             netloc = f"{self.username}:{decrypted_pwd}@{parsed.hostname}"
             if parsed.port:
                 netloc += f":{parsed.port}"

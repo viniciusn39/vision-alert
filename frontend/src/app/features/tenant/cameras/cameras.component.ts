@@ -808,11 +808,17 @@ export class CamerasComponent implements OnInit {
     this.liveLoading.set(true);
     this.liveError.set(false);
     this.liveStreamUrl.set(null);
-    // Get token - try multiple keys
-    const token = localStorage.getItem('access_token') || '';
-    setTimeout(() => {
-      this.liveStreamUrl.set(this.api.getCameraStreamUrl(cam.id, token));
-    }, 200);
+    // Pede um stream-token curto (60s). Evita colocar o JWT de sessão
+    // em query string do <img>.
+    this.api.requestStreamToken(cam.id).subscribe({
+      next: (res) => {
+        this.liveStreamUrl.set(this.api.getCameraStreamUrl(cam.id, res.token));
+      },
+      error: () => {
+        this.liveLoading.set(false);
+        this.liveError.set(true);
+      }
+    });
   }
 
   closeLive() {
