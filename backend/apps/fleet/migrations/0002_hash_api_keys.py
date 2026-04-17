@@ -1,10 +1,3 @@
-"""
-Migra o campo api_key (plaintext) para api_key_hash (sha256) + api_key_prefix.
-
-Após esta migração rodar, as api_keys originais não podem mais ser recuperadas
-do banco — apenas verificadas. Se os dispositivos em campo já estavam com as
-chaves em .env local, eles continuarão funcionando pelo hash.
-"""
 import hashlib
 from django.db import migrations, models
 
@@ -21,7 +14,6 @@ def hash_existing_keys(apps, schema_editor):
 
 
 def noop_reverse(apps, schema_editor):
-    # Não dá para recuperar chaves plaintext a partir do hash.
     pass
 
 
@@ -35,7 +27,7 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="edgedevice",
             name="api_key_hash",
-            field=models.CharField(max_length=64, default="", db_index=True),
+            field=models.CharField(max_length=64, default=""),
             preserve_default=False,
         ),
         migrations.AddField(
