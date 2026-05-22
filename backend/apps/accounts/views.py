@@ -22,7 +22,11 @@ class MeView(APIView):
     def get(self, request):
         return Response(UserSerializer(request.user).data)
     def patch(self, request):
-        ser = UserSerializer(request.user, data=request.data, partial=True)
+        # Trocar a propria senha NAO passa por aqui: deve usar
+        # ChangePasswordView, que exige a senha antiga. Qualquer
+        # "password" enviado neste endpoint e descartado de proposito.
+        data = {k: v for k, v in request.data.items() if k != "password"}
+        ser = UserSerializer(request.user, data=data, partial=True)
         ser.is_valid(raise_exception=True)
         ser.save()
         return Response(ser.data)
@@ -61,6 +65,9 @@ class TenantUserListCreateView(generics.ListCreateAPIView):
         serializer.save(tenant=tenant, role=serializer.validated_data.get("role", User.TENANT_OPERATOR))
 
 class TenantUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    # Restrita a admin do tenant. O UserSerializer aceita o campo
+    # opcional "password": e por aqui que o admin redefine a senha
+    # de outro usuario, sem precisar da senha antiga.
     permission_classes = [IsAuthenticated, IsTenantAdmin]
     serializer_class = UserSerializer
     def get_queryset(self):

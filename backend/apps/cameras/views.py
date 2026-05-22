@@ -43,7 +43,7 @@ class CameraViewSet(TenantQuerysetMixin, viewsets.ModelViewSet):
             current = tenant.cameras.select_for_update().count()
             if current >= plan.max_cameras:
                 raise PermissionDenied(f"Limite de câmeras do plano atingido ({plan.max_cameras}).")
-            serializer.save(tenant=tenant)
+            serializer.save(tenant=tenant, is_active=False, status="offline")
 
     @action(detail=True, methods=["post"])
     def start(self, request, pk=None):

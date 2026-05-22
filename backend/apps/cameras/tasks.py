@@ -8,6 +8,7 @@ Mudanças desta versão:
 - Lock distribuído em start_camera_processing para evitar duas VideoCapture
   simultâneas da mesma câmera quando o health check dispara retries.
 - Pre-warm do modelo YOLO no worker_ready signal.
+- Logs explícitos de início de processamento, fim de vídeo e alerta gerado.
 """
 import logging
 import time
@@ -166,6 +167,8 @@ def start_camera_processing(self, camera_id: int):
         interval = 1.0 / fps_target
         last_time = 0
         is_file = camera.protocol in ("file", "youtube")
+        logger.info("Camera %s (%s): processamento iniciado [%s]", camera_id,
+                    camera.name, "arquivo - roda uma vez" if is_file else "continuo")
         fps = cap.get(cv2.CAP_PROP_FPS) or 25
         skip = max(1, int(fps / fps_target))
         frame_n = 0
@@ -178,6 +181,7 @@ def start_camera_processing(self, camera_id: int):
                         Camera.objects.filter(pk=camera_id).update(
                             is_active=False, status="offline"
                         )
+                        logger.info("Camera %s: video terminou - camera parada (Stop).", camera_id)
                     break
                 frame_n += 1
                 if is_file:
@@ -201,7 +205,7 @@ def start_camera_processing(self, camera_id: int):
                         last_seen=timezone.now(), status="online"
                     )
 
-                analyze_frame.delay(camera_id, _enc(frame))
+                analyze_frame.apply_async(args=[camera_id, _enc(frame)], queue="analysis")
 
                 # Renova lock para não expirar durante stream longo
                 cache.set(lock_key, "1", timeout=settings.LIVE_STREAM_MAX_SECONDS)
@@ -212,7 +216,17 @@ def start_camera_processing(self, camera_id: int):
             logger.exception(f"Camera {camera_id} processing error: {e}")
         finally:
             cap.release()
-            Camera.objects.filter(pk=camera_id).update(status="offline")
+            # Arquivo/YouTube e finito: ao encerrar o processamento por
+            # QUALQUER motivo (fim do video, excecao, timeout, interrupcao),
+            # a camera volta para Stop (is_active=False).
+            # Camera continua (RTSP) so atualiza o status.
+            if is_file:
+                Camera.objects.filter(pk=camera_id).update(
+                    is_active=False, status="offline"
+                )
+                logger.info("Camera %s: processamento encerrado - camera parada (Stop).", camera_id)
+            else:
+                Camera.objects.filter(pk=camera_id).update(status="offline")
     finally:
         cache.delete(lock_key)
 
@@ -262,6 +276,8 @@ def analyze_frame(camera_id: int, frame_b64: str):
             rule=rule, camera=camera, description=desc, detection_data=data
         )
         alert.snapshot.save(cf.name, cf, save=True)
+        logger.info("ALERTA gerado - camera=%s regra='%s' (%s): %s",
+                    camera_id, rule.name, rule.behavior, desc)
 
         from apps.notifications.tasks import send_alert_notifications
         send_alert_notifications.delay(alert.id)

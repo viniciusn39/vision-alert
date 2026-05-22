@@ -6,9 +6,9 @@ router = DefaultRouter()
 router.register("cameras",      CameraViewSet)
 router.register("camera-zones", CameraZoneViewSet)
 
-urlpatterns = router.urls + [
+urlpatterns = [
     path("cameras/upload-video/", VideoUploadView.as_view()),
     path("cameras/youtube-download/", YouTubeDownloadView.as_view()),
     path("cameras/<int:pk>/detail/", CameraDetailView.as_view()),
     path("cameras/<int:pk>/stream/", CameraLiveStreamView.as_view()),
-]
+] + router.urls

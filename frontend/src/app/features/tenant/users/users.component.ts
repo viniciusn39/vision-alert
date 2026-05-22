@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from "@angular/core";
 import { CommonModule } from "@angular/common";
 import { FormsModule } from "@angular/forms";
 import { ApiService } from "../../../core/services/api.service";
+import { AuthService } from "../../../core/services/auth.service";
 import { User } from "../../../core/models/models";
 
 const ROLES = [
@@ -150,7 +151,13 @@ const ROLES = [
       @if (!editing()) {
         <div class="form-group">
           <label>Senha *</label>
-          <input type="password" [(ngModel)]="form.password" placeholder="Mínimo 6 caracteres"/>
+          <input type="password" [(ngModel)]="form.password" placeholder="Mínimo 8 caracteres"/>
+        </div>
+      } @else if (canEditPassword()) {
+        <div class="form-group">
+          <label>Nova senha</label>
+          <input type="password" [(ngModel)]="form.password" placeholder="Deixe em branco para manter a senha atual"/>
+          <p class="field-hint">Preencha apenas se quiser redefinir a senha deste usuário.</p>
         </div>
       }
 
@@ -182,9 +189,11 @@ const ROLES = [
 .ro-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
 .ro-label{font-size:13px;font-weight:600}
 .ro-desc{font-size:11px;color:var(--muted);margin-top:1px}
+.field-hint{font-size:11px;color:var(--muted);margin-top:5px}
 `]})
 export class UsersComponent implements OnInit {
   private api = inject(ApiService);
+  private auth = inject(AuthService);
   roles = ROLES;
   users        = signal<User[]>([]);
   showModal    = signal(false);
@@ -197,6 +206,9 @@ export class UsersComponent implements OnInit {
   ngOnInit() { this.load(); }
   load() { this.api.getUsers().subscribe((u: any) => this.users.set(Array.isArray(u) ? u : (u.results ?? []))); }
 
+  // Só o admin do tenant pode redefinir a senha de outros usuários.
+  canEditPassword() { return this.auth.isTenantAdmin; }
+
   roleLabel(r: string) { return ROLES.find(x => x.value === r)?.label ?? r; }
   roleColor(r: string) { return ROLES.find(x => x.value === r)?.color ?? "#666"; }
   initials(n: string)  { return (n||'').split(' ').slice(0,2).map(w=>w[0]??'').join('').toUpperCase()||'?'; }
@@ -204,7 +216,8 @@ export class UsersComponent implements OnInit {
 
   openModal(u?: User) {
     this.editing.set(u||null);
-    this.form = u ? {...u} : { role:"tenant_operator" };
+    // password sempre começa vazio — nunca pré-preenchido com dado existente.
+    this.form = u ? {...u, password:""} : { role:"tenant_operator", password:"" };
     this.error.set("");
     this.showModal.set(true);
   }
@@ -212,9 +225,17 @@ export class UsersComponent implements OnInit {
 
   save() {
     this.saving.set(true); this.error.set("");
-    const req = this.editing()
-      ? this.api.updateUser(this.editing()!.id, { name:this.form.name, role:this.form.role })
-      : this.api.createUser(this.form);
+    let req;
+    if (this.editing()) {
+      const payload: any = { name: this.form.name, role: this.form.role };
+      // Inclui a senha só se o admin preencheu o campo.
+      if (this.canEditPassword() && this.form.password) {
+        payload.password = this.form.password;
+      }
+      req = this.api.updateUser(this.editing()!.id, payload);
+    } else {
+      req = this.api.createUser(this.form);
+    }
     req.subscribe({
       next: () => { this.load(); this.showModal.set(false); this.saving.set(false); },
       error: (err:any) => { this.error.set(Object.values(err.error||{}).flat().join(" ")||"Erro ao salvar."); this.saving.set(false); }

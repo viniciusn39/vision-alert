@@ -1,5 +1,5 @@
 import { Routes } from '@angular/router';
-import { authGuard, superAdminGuard, partnerGuard, tenantGuard } from './core/guards/auth.guard';
+import { authGuard, superAdminGuard, partnerGuard, tenantGuard, tenantAdminGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   // Public — Landing page
@@ -53,7 +53,7 @@ export const routes: Routes = [
       { path: 'rules',     loadComponent: () => import('./features/tenant/rules/rules.component').then(m => m.RulesComponent) },
       { path: 'history',   loadComponent: () => import('./features/tenant/history/history.component').then(m => m.HistoryComponent) },
       { path: 'billing',   loadComponent: () => import('./features/tenant/billing/billing.component').then(m => m.BillingComponent) },
-      { path: 'users',     loadComponent: () => import('./features/tenant/users/users.component').then(m => m.UsersComponent) },
+      { path: 'users',     loadComponent: () => import('./features/tenant/users/users.component').then(m => m.UsersComponent), canActivate: [tenantAdminGuard] },
       { path: 'settings',  loadComponent: () => import('./features/tenant/settings/settings.component').then(m => m.SettingsComponent) },
     ]
   },
